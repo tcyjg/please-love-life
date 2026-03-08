@@ -1,11 +1,10 @@
 {
-	"id": "sample-life",
-	"name": "Famous Quote Generator",
+	"id": "please-love-life",
+	"name": "please-love-life",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "please love life everyday",
+	"description": "Push quotes and pictures for you every day",
 	"author": "tcyjg",
 	"authorUrl": "https://github.com/tcyjg",
-	"fundingUrl": "https://obsidian.md/pricing",
 	"isDesktopOnly": false
 }
