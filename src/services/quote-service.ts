@@ -33,6 +33,14 @@ export class DailyQuoteService {
 		return markdown;
 	}
 
+	async getFreshQuoteMarkdown(): Promise<string> {
+		const today = getTodayKey();
+		const markdown = await this.fetchQuoteMarkdown(today);
+		this.plugin.settings.quoteCache = { date: today, markdown };
+		await this.plugin.saveSettings();
+		return markdown;
+	}
+
 	private async fetchQuoteMarkdown(today: string): Promise<string> {
 		try {
 			const apiKey = this.plugin.settings.quoteApiKey.trim();

@@ -34,11 +34,31 @@ export class DailyPhotoService {
 		return markdown;
 	}
 
-	private buildPhotoUrl(today: string, width: number, height: number): string {
+	async getFreshPhotoMarkdown(): Promise<string> {
+		const today = getTodayKey();
+		const width = this.plugin.settings.photoWidth;
+		const height = this.plugin.settings.photoHeight;
+		const cacheBust = Date.now().toString();
+		const photoUrl = this.buildPhotoUrl(today, width, height, cacheBust);
+		const markdown = this.plugin.settings.downloadPhotoToVault
+			? await this.getLocalPhotoMarkdown(today, width, height, photoUrl)
+			: `![Today's inspiration](${photoUrl})`;
+
+		this.plugin.settings.photoCache = {
+			date: today,
+			markdown,
+		};
+		await this.plugin.saveSettings();
+
+		return markdown;
+	}
+
+	private buildPhotoUrl(today: string, width: number, height: number, seedOverride?: string): string {
 		const apiKey = this.plugin.settings.photoApiKey.trim();
+		const seed = seedOverride || today;
 		return this.plugin.settings.photoApiUrl
 			.split("{date}")
-			.join(encodeURIComponent(today))
+			.join(encodeURIComponent(seed))
 			.split("{width}")
 			.join(String(width))
 			.split("{height}")
@@ -55,6 +75,7 @@ export class DailyPhotoService {
 			const filePath = `${PHOTO_FOLDER}/photo-${today}-${width}x${height}.${extension}`;
 			const existing = this.plugin.app.vault.getAbstractFileByPath(filePath);
 			if (existing instanceof TFile) {
+				await this.plugin.app.vault.modifyBinary(existing, downloaded.arrayBuffer);
 				return `![[${filePath}]]`;
 			}
 

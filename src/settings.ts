@@ -13,6 +13,7 @@ export interface PhotoCache {
 
 export interface PleaseLoveLifeSettings {
 	autoResolveOnCreate: boolean;
+	realtimeResolveOnModify: boolean;
 	quotePlaceholder: string;
 	photoPlaceholder: string;
 	quoteApiUrl: string;
@@ -28,6 +29,7 @@ export interface PleaseLoveLifeSettings {
 
 export const DEFAULT_SETTINGS: PleaseLoveLifeSettings = {
 	autoResolveOnCreate: true,
+	realtimeResolveOnModify: true,
 	quotePlaceholder: "{{pll_quote}}",
 	photoPlaceholder: "{{pll_photo}}",
 	quoteApiUrl: "https://zenquotes.io/api/today",
@@ -54,11 +56,21 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("自动替换占位符")
+			.setName("自动替换占位符（新建文件）")
 			.setDesc("创建新的 Markdown 文件时，自动替换名言和图片占位符。")
 			.addToggle((toggle) =>
 				toggle.setValue(this.plugin.settings.autoResolveOnCreate).onChange(async (value) => {
 					this.plugin.settings.autoResolveOnCreate = value;
+					await this.plugin.saveSettings();
+				}),
+			);
+
+		new Setting(containerEl)
+			.setName("实时监听当前文件修改")
+			.setDesc("仅监听当前活动文件的修改事件并尝试替换占位符。")
+			.addToggle((toggle) =>
+				toggle.setValue(this.plugin.settings.realtimeResolveOnModify).onChange(async (value) => {
+					this.plugin.settings.realtimeResolveOnModify = value;
 					await this.plugin.saveSettings();
 				}),
 			);

@@ -55,12 +55,12 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEvent(
 				this.app.vault.on("create", (file) => {
-					void this.maybeResolveByEvent(file, 300);
+					void this.maybeResolveOnCreate(file);
 				}),
 			);
 			this.registerEvent(
 				this.app.vault.on("modify", (file) => {
-					void this.maybeResolveByEvent(file, 150);
+					void this.maybeResolveOnModify(file);
 				}),
 			);
 		});
@@ -74,31 +74,43 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private async maybeResolveByEvent(file: unknown, delayMs: number) {
-		if (!(file instanceof TFile) || !this.settings.autoResolveOnCreate || file.extension !== "md") {
+	private async maybeResolveOnCreate(file: unknown) {
+		if (!(file instanceof TFile) || file.extension !== "md" || !this.settings.autoResolveOnCreate) {
 			return;
 		}
 
+		this.scheduleResolve(file, 300);
+	}
+
+	private async maybeResolveOnModify(file: unknown) {
+		if (!(file instanceof TFile) || file.extension !== "md" || !this.settings.realtimeResolveOnModify) {
+			return;
+		}
+
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile || activeFile.path !== file.path) {
+			return;
+		}
+
+		this.scheduleResolve(file, 150);
+	}
+
+	private scheduleResolve(file: TFile, delayMs: number) {
 		const path = file.path;
 		if (this.resolvingFiles.has(path)) {
 			return;
 		}
 
 		this.resolvingFiles.add(path);
-		try {
-			window.setTimeout(async () => {
-				try {
-					await this.placeholderResolver.resolveFile(file);
-				} catch (error) {
-					console.error("please-love-life: failed to resolve placeholders", error);
-				} finally {
-					this.resolvingFiles.delete(path);
-				}
-			}, delayMs);
-		} catch (error) {
-			this.resolvingFiles.delete(path);
-			console.error("please-love-life: failed to schedule placeholder resolving", error);
-		}
+		window.setTimeout(async () => {
+			try {
+				await this.placeholderResolver.resolveFile(file);
+			} catch (error) {
+				console.error("please-love-life: failed to resolve placeholders", error);
+			} finally {
+				this.resolvingFiles.delete(path);
+			}
+		}, delayMs);
 	}
 
 	private async insertQuote(editor: Editor) {
