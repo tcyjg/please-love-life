@@ -68,6 +68,10 @@ export default class PleaseLoveLifePlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<PleaseLoveLifeSettings>);
+		if (this.settings.photoSourcePreset !== "picsum" && this.settings.photoSourcePreset !== "custom") {
+			this.settings.photoSourcePreset = "picsum";
+			this.settings.photoApiUrl = DEFAULT_SETTINGS.photoApiUrl;
+		}
 	}
 
 	async saveSettings() {

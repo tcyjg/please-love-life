@@ -11,9 +11,14 @@ export interface PhotoCache {
 	markdown: string;
 }
 
+export type QuoteSourcePreset = "hitokoto" | "zenquotes" | "jinrishici" | "custom";
+export type PhotoSourcePreset = "picsum" | "custom";
+
 export interface PleaseLoveLifeSettings {
 	autoResolveOnCreate: boolean;
 	realtimeResolveOnModify: boolean;
+	quoteSourcePreset: QuoteSourcePreset;
+	photoSourcePreset: PhotoSourcePreset;
 	quotePlaceholder: string;
 	photoPlaceholder: string;
 	quoteApiUrl: string;
@@ -27,14 +32,26 @@ export interface PleaseLoveLifeSettings {
 	photoCache: PhotoCache | null;
 }
 
+export const QUOTE_PRESET_URLS: Record<Exclude<QuoteSourcePreset, "custom">, string> = {
+	hitokoto: "https://v1.hitokoto.cn",
+	zenquotes: "https://zenquotes.io/api/today",
+	jinrishici: "https://v1.jinrishici.com/all.json",
+};
+
+export const PHOTO_PRESET_URLS: Record<Exclude<PhotoSourcePreset, "custom">, string> = {
+	picsum: "https://picsum.photos/seed/{date}/{width}/{height}",
+};
+
 export const DEFAULT_SETTINGS: PleaseLoveLifeSettings = {
 	autoResolveOnCreate: true,
 	realtimeResolveOnModify: true,
+	quoteSourcePreset: "hitokoto",
+	photoSourcePreset: "picsum",
 	quotePlaceholder: "{{pll_quote}}",
 	photoPlaceholder: "{{pll_photo}}",
-	quoteApiUrl: "https://zenquotes.io/api/today",
+	quoteApiUrl: QUOTE_PRESET_URLS.hitokoto,
 	quoteApiKey: "",
-	photoApiUrl: "https://picsum.photos/seed/{date}/{width}/{height}",
+	photoApiUrl: PHOTO_PRESET_URLS.picsum,
 	photoApiKey: "",
 	downloadPhotoToVault: true,
 	photoWidth: 1280,
@@ -76,6 +93,48 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
+			.setName("名言源预设")
+			.setDesc("选择常用名言接口预设。选择自定义后可手动填写名言 API 地址。")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("hitokoto", "一言（中文）")
+					.addOption("zenquotes", "ZenQuotes（英文）")
+					.addOption("jinrishici", "今日诗词（中文）")
+					.addOption("custom", "自定义")
+					.setValue(this.plugin.settings.quoteSourcePreset)
+					.onChange(async (value) => {
+						const preset = value as QuoteSourcePreset;
+						this.plugin.settings.quoteSourcePreset = preset;
+						if (preset !== "custom") {
+							this.plugin.settings.quoteApiUrl = QUOTE_PRESET_URLS[preset];
+						}
+						this.plugin.settings.quoteCache = null;
+						await this.plugin.saveSettings();
+						this.display();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("图片源预设")
+			.setDesc("选择常用图片接口预设。选择自定义后可手动填写图片 API 地址。")
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("picsum", "Picsum")
+					.addOption("custom", "自定义")
+					.setValue(this.plugin.settings.photoSourcePreset)
+					.onChange(async (value) => {
+						const preset = value as PhotoSourcePreset;
+						this.plugin.settings.photoSourcePreset = preset;
+						if (preset !== "custom") {
+							this.plugin.settings.photoApiUrl = PHOTO_PRESET_URLS[preset];
+						}
+						this.plugin.settings.photoCache = null;
+						await this.plugin.saveSettings();
+						this.display();
+					}),
+			);
+
+		new Setting(containerEl)
 			.setName("名言占位符")
 			.setDesc("用于替换为今日名言的占位符文本。")
 			.addText((text) =>
@@ -98,13 +157,17 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("名言 API 地址")
 			.setDesc("返回今日名言的 API 地址。支持变量 {apiKey}。")
-			.addText((text) =>
-				text.setValue(this.plugin.settings.quoteApiUrl).onChange(async (value) => {
+			.addText((text) => {
+				if (this.plugin.settings.quoteSourcePreset !== "custom") {
+					text.setDisabled(true);
+				}
+				return text.setValue(this.plugin.settings.quoteApiUrl).onChange(async (value) => {
 					this.plugin.settings.quoteApiUrl = value.trim() || DEFAULT_SETTINGS.quoteApiUrl;
+					this.plugin.settings.quoteSourcePreset = "custom";
 					this.plugin.settings.quoteCache = null;
 					await this.plugin.saveSettings();
-				}),
-			);
+				});
+			});
 
 		new Setting(containerEl)
 			.setName("名言 API Key")
@@ -120,13 +183,17 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("图片 API 地址")
 			.setDesc("图片接口地址。支持变量 {date}、{width}、{height}、{apiKey}。")
-			.addText((text) =>
-				text.setValue(this.plugin.settings.photoApiUrl).onChange(async (value) => {
+			.addText((text) => {
+				if (this.plugin.settings.photoSourcePreset !== "custom") {
+					text.setDisabled(true);
+				}
+				return text.setValue(this.plugin.settings.photoApiUrl).onChange(async (value) => {
 					this.plugin.settings.photoApiUrl = value.trim() || DEFAULT_SETTINGS.photoApiUrl;
+					this.plugin.settings.photoSourcePreset = "custom";
 					this.plugin.settings.photoCache = null;
 					await this.plugin.saveSettings();
-				}),
-			);
+				});
+			});
 
 		new Setting(containerEl)
 			.setName("图片 API Key")

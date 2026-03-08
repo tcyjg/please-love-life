@@ -8,9 +8,9 @@ interface ZenQuote {
 }
 
 const FALLBACK_QUOTES: Array<{ text: string; author: string }> = [
-	{ text: "Small daily improvements are the key to long-term results.", author: "Unknown" },
-	{ text: "Do what you can, with what you have, where you are.", author: "Theodore Roosevelt" },
-	{ text: "The best way out is always through.", author: "Robert Frost" },
+	{ text: "As long as your direction is right, every small step counts.", author: "Unknown" },
+	{ text: "A journey of a thousand miles begins with a single step.", author: "Laozi" },
+	{ text: "Tiny flowers still bloom with full strength.", author: "Yuan Mei" },
 ];
 
 export class DailyQuoteService {
@@ -43,32 +43,33 @@ export class DailyQuoteService {
 
 	private async fetchQuoteMarkdown(today: string): Promise<string> {
 		try {
-			const apiKey = this.plugin.settings.quoteApiKey.trim();
-			const url = this.plugin.settings.quoteApiUrl.split("{apiKey}").join(encodeURIComponent(apiKey));
-			const request: RequestUrlParam = {
-				url,
-				method: "GET",
-			};
-
-			if (apiKey) {
-				request.headers = {
-					"X-API-Key": apiKey,
-					Authorization: `Bearer ${apiKey}`,
-				};
-			}
-
-			const response = await requestUrl(request);
-			const json = response.json as unknown;
-			const record = this.readQuote(json);
+			const response = await requestUrl(this.buildRequest());
+			const record = this.readQuote(response.json as unknown);
 			if (!record) {
 				throw new Error("Quote API returned unexpected data");
 			}
-			return `> "${record.text}"\n> - ${record.author}`;
+			return this.toCallout(record.text, record.author);
 		} catch (error) {
 			console.error("please-love-life: quote request failed", error);
-			new Notice("名言 API 请求失败，已使用本地兜底名言。");
+			new Notice("Quote API request failed. Local fallback quote is used.");
 			return this.fallbackQuote(today);
 		}
+	}
+
+	private buildRequest(): RequestUrlParam {
+		const apiKey = this.plugin.settings.quoteApiKey.trim();
+		const url = this.plugin.settings.quoteApiUrl.split("{apiKey}").join(encodeURIComponent(apiKey));
+		const request: RequestUrlParam = { url, method: "GET" };
+
+		if (!apiKey) {
+			return request;
+		}
+
+		request.headers = {
+			"X-API-Key": apiKey,
+			Authorization: `Bearer ${apiKey}`,
+		};
+		return request;
 	}
 
 	private readQuote(data: unknown): { text: string; author: string } | null {
@@ -81,25 +82,63 @@ export class DailyQuoteService {
 			}
 		}
 
-		if (typeof data === "object" && data !== null) {
-			const single = data as Record<string, unknown>;
-			const text = typeof single.quote === "string" ? single.quote.trim() : "";
-			const author = typeof single.author === "string" ? single.author.trim() : "";
-			if (text) {
-				return { text, author: author || "Unknown" };
-			}
+		if (typeof data !== "object" || data === null) {
+			return null;
+		}
+
+		const obj = data as Record<string, unknown>;
+
+		const hitokotoText = this.stringValue(obj.hitokoto);
+		if (hitokotoText) {
+			const fromWho = this.stringValue(obj.from_who);
+			const from = this.stringValue(obj.from);
+			return {
+				text: hitokotoText,
+				author: fromWho || from || "Hitokoto",
+			};
+		}
+
+		const poemText = this.stringValue(obj.content);
+		if (poemText) {
+			const author = this.stringValue(obj.author);
+			const origin = this.stringValue(obj.origin);
+			return {
+				text: poemText,
+				author: author || origin || "Jinrishici",
+			};
+		}
+
+		const genericText = this.stringValue(obj.quote) || this.stringValue(obj.text);
+		if (genericText) {
+			const genericAuthor = this.stringValue(obj.author) || this.stringValue(obj.source);
+			return {
+				text: genericText,
+				author: genericAuthor || "Unknown",
+			};
 		}
 
 		return null;
+	}
+
+	private stringValue(value: unknown): string {
+		return typeof value === "string" ? value.trim() : "";
 	}
 
 	private fallbackQuote(today: string): string {
 		const index = this.hash(today) % FALLBACK_QUOTES.length;
 		const quote = FALLBACK_QUOTES[index];
 		if (!quote) {
-			return "> \"Keep moving forward.\"\n> - Unknown";
+			return this.toCallout("Starting now is always better than waiting.", "Unknown");
 		}
-		return `> "${quote.text}"\n> - ${quote.author}`;
+		return this.toCallout(quote.text, quote.author);
+	}
+
+	private toCallout(text: string, author: string): string {
+		return [
+			"> [!pll-quote] Today's energy",
+			`> ${text}`,
+			`> **- ${author}**`,
+		].join("\n");
 	}
 
 	private hash(input: string): number {
