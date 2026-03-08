@@ -1,99 +1,123 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Editor, Notice, Plugin, TFile } from "obsidian";
+import { DEFAULT_SETTINGS, PleaseLoveLifeSettingTab, PleaseLoveLifeSettings } from "./settings";
+import { DailyPhotoService } from "./services/photo-service";
+import { DailyQuoteService } from "./services/quote-service";
+import { PlaceholderResolver } from "./templates/placeholder-resolver";
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class PleaseLoveLifePlugin extends Plugin {
+	settings: PleaseLoveLifeSettings;
+	private quoteService: DailyQuoteService;
+	private photoService: DailyPhotoService;
+	private placeholderResolver: PlaceholderResolver;
+	private resolvingFiles: Set<string> = new Set();
 
 	async onload() {
 		await this.loadSettings();
 
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
+		this.quoteService = new DailyQuoteService(this);
+		this.photoService = new DailyPhotoService(this);
+		this.placeholderResolver = new PlaceholderResolver(this, this.quoteService, this.photoService);
 
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
+			id: "please-love-life-resolve-placeholders",
+			name: "Resolve quote and photo placeholders in current note",
 			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+				const file = this.app.workspace.getActiveFile();
+				if (!file || file.extension !== "md") {
+					return false;
 				}
-				return false;
-			}
+
+				if (!checking) {
+					void this.placeholderResolver.resolveFile(file);
+				}
+				return true;
+			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
+		this.addCommand({
+			id: "please-love-life-insert-todays-quote",
+			name: "Insert today's quote",
+			editorCallback: (editor: Editor) => {
+				void this.insertQuote(editor);
+			},
 		});
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.addCommand({
+			id: "please-love-life-insert-todays-photo",
+			name: "Insert today's photo",
+			editorCallback: (editor: Editor) => {
+				void this.insertPhoto(editor);
+			},
+		});
 
-	}
+		this.addSettingTab(new PleaseLoveLifeSettingTab(this.app, this));
 
-	onunload() {
+		this.app.workspace.onLayoutReady(() => {
+			this.registerEvent(
+				this.app.vault.on("create", (file) => {
+					void this.maybeResolveByEvent(file, 300);
+				}),
+			);
+			this.registerEvent(
+				this.app.vault.on("modify", (file) => {
+					void this.maybeResolveByEvent(file, 150);
+				}),
+			);
+		});
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<PleaseLoveLifeSettings>);
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-}
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
+	private async maybeResolveByEvent(file: unknown, delayMs: number) {
+		if (!(file instanceof TFile) || !this.settings.autoResolveOnCreate || file.extension !== "md") {
+			return;
+		}
+
+		const path = file.path;
+		if (this.resolvingFiles.has(path)) {
+			return;
+		}
+
+		this.resolvingFiles.add(path);
+		try {
+			window.setTimeout(async () => {
+				try {
+					await this.placeholderResolver.resolveFile(file);
+				} catch (error) {
+					console.error("please-love-life: failed to resolve placeholders", error);
+				} finally {
+					this.resolvingFiles.delete(path);
+				}
+			}, delayMs);
+		} catch (error) {
+			this.resolvingFiles.delete(path);
+			console.error("please-love-life: failed to schedule placeholder resolving", error);
+		}
 	}
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
+	private async insertQuote(editor: Editor) {
+		try {
+			const quote = await this.quoteService.getTodayQuoteMarkdown();
+			editor.replaceSelection(quote);
+		} catch (error) {
+			console.error("please-love-life: failed to insert quote", error);
+			new Notice("Failed to fetch today's quote.");
+		}
 	}
 
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	private async insertPhoto(editor: Editor) {
+		try {
+			const photo = await this.photoService.getTodayPhotoMarkdown();
+			editor.replaceSelection(photo);
+		} catch (error) {
+			console.error("please-love-life: failed to insert photo", error);
+			new Notice("Failed to fetch today's photo.");
+		}
 	}
 }
