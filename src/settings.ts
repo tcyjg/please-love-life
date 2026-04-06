@@ -98,7 +98,7 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 			.addDropdown((dropdown) =>
 				dropdown
 					.addOption("hitokoto", "一言（中文）")
-					.addOption("zenquotes", "ZenQuotes（英文）")
+					.addOption("zenquotes", "Zen quotes（英文）")
 					.addOption("jinrishici", "今日诗词（中文）")
 					.addOption("custom", "自定义")
 					.setValue(this.plugin.settings.quoteSourcePreset)
@@ -170,8 +170,8 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("名言 API Key")
-			.setDesc("可选。申请后填入；会同时尝试 Header 和 URL 变量方式。")
+			.setName("名言 API key")
+			.setDesc("可选。申请后填入；会同时尝试 header 和 URL 变量方式。")
 			.addText((text) =>
 				text.setPlaceholder("可选").setValue(this.plugin.settings.quoteApiKey).onChange(async (value) => {
 					this.plugin.settings.quoteApiKey = value.trim();
@@ -196,8 +196,8 @@ export class PleaseLoveLifeSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("图片 API Key")
-			.setDesc("可选。申请后填入；会同时尝试 Header 和 URL 变量方式。")
+			.setName("图片 API key")
+			.setDesc("可选。申请后填入；会同时尝试 header 和 URL 变量方式。")
 			.addText((text) =>
 				text.setPlaceholder("可选").setValue(this.plugin.settings.photoApiKey).onChange(async (value) => {
 					this.plugin.settings.photoApiKey = value.trim();

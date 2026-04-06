@@ -19,7 +19,7 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		this.placeholderResolver = new PlaceholderResolver(this, this.quoteService, this.photoService);
 
 		this.addCommand({
-			id: "please-love-life-resolve-placeholders",
+			id: "resolve-placeholders",
 			name: "Resolve quote and photo placeholders in current note",
 			checkCallback: (checking: boolean) => {
 				const file = this.app.workspace.getActiveFile();
@@ -35,7 +35,7 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "please-love-life-insert-todays-quote",
+			id: "insert-todays-quote",
 			name: "Insert today's quote",
 			editorCallback: (editor: Editor) => {
 				void this.insertQuote(editor);
@@ -43,7 +43,7 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: "please-love-life-insert-todays-photo",
+			id: "insert-todays-photo",
 			name: "Insert today's photo",
 			editorCallback: (editor: Editor) => {
 				void this.insertPhoto(editor);
@@ -55,12 +55,12 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		this.app.workspace.onLayoutReady(() => {
 			this.registerEvent(
 				this.app.vault.on("create", (file) => {
-					void this.maybeResolveOnCreate(file);
+					this.maybeResolveOnCreate(file);
 				}),
 			);
 			this.registerEvent(
 				this.app.vault.on("modify", (file) => {
-					void this.maybeResolveOnModify(file);
+					this.maybeResolveOnModify(file);
 				}),
 			);
 		});
@@ -78,7 +78,7 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	private async maybeResolveOnCreate(file: unknown) {
+	private maybeResolveOnCreate(file: unknown) {
 		if (!(file instanceof TFile) || file.extension !== "md" || !this.settings.autoResolveOnCreate) {
 			return;
 		}
@@ -86,7 +86,7 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		this.scheduleResolve(file, 300);
 	}
 
-	private async maybeResolveOnModify(file: unknown) {
+	private maybeResolveOnModify(file: unknown) {
 		if (!(file instanceof TFile) || file.extension !== "md" || !this.settings.realtimeResolveOnModify) {
 			return;
 		}
@@ -106,14 +106,15 @@ export default class PleaseLoveLifePlugin extends Plugin {
 		}
 
 		this.resolvingFiles.add(path);
-		window.setTimeout(async () => {
-			try {
-				await this.placeholderResolver.resolveFile(file);
-			} catch (error) {
-				console.error("please-love-life: failed to resolve placeholders", error);
-			} finally {
-				this.resolvingFiles.delete(path);
-			}
+		window.setTimeout(() => {
+			void this.placeholderResolver
+				.resolveFile(file)
+				.catch((error) => {
+					console.error("please-love-life: failed to resolve placeholders", error);
+				})
+				.finally(() => {
+					this.resolvingFiles.delete(path);
+				});
 		}, delayMs);
 	}
 
