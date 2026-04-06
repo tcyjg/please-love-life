@@ -49,3 +49,7 @@ API 地址支持变量：`{apiKey}`、`{date}`、`{width}`、`{height}`。
 npm install
 npm run build
 ```
+
+使用方式：在文本中填入占位符，就可以进行填入名言或者照片
+
+![alt text](image.png)
